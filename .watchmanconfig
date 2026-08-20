@@ -1,0 +1,12 @@
+{
+  "ignore_dirs": [
+    "project",
+    "handoffs",
+    "logs",
+    "archive",
+    ".git",
+    "backend/node_modules",
+    "backend/dist",
+    "mobile/.expo"
+  ]
+}

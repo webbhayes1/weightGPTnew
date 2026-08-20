@@ -1,0 +1,1092 @@
+// WeightGPT Database Schema - Complete 25-Table Implementation
+// Version: 1.0
+// Based on: project/implementation/DATABASE_SCHEMA.md
+// Date: 2025-11-11
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum Goal {
+  lose_weight
+  gain_weight
+  maintain
+}
+
+enum Gender {
+  male
+  female
+}
+
+enum ActivityLevel {
+  sedentary
+  lightly_active
+  moderately_active
+  very_active
+}
+
+enum FitnessLevel {
+  beginner
+  intermediate
+  advanced
+}
+
+enum ShoppingDay {
+  monday
+  tuesday
+  wednesday
+  thursday
+  friday
+  saturday
+  sunday
+  flexible
+}
+
+enum WeeklyResetDay {
+  monday
+  sunday
+}
+
+enum SubscriptionStatus {
+  trial
+  active
+  expired
+}
+
+enum SubscriptionStatusDetailed {
+  trial
+  active
+  canceled
+  expired
+  past_due
+}
+
+enum PlanType {
+  monthly
+  annual
+  lifetime
+}
+
+enum TransactionStatus {
+  succeeded
+  pending
+  failed
+  refunded
+}
+
+enum PlanStatus {
+  active
+  upcoming
+  past
+}
+
+enum MealType {
+  breakfast
+  lunch
+  dinner
+  snack
+}
+
+enum Unit {
+  count
+  oz
+  lb
+  cup
+  tbsp
+  tsp
+  package
+}
+
+enum IngredientCategory {
+  proteins
+  produce
+  dairy_eggs @map("dairy-eggs")
+  pantry
+  spices
+  frozen
+  bakery
+  other
+}
+
+enum WorkoutType {
+  strength
+  cardio
+}
+
+enum WorkoutCategory {
+  upper_body
+  lower_body
+  full_body
+  core
+  cardio
+  hiit
+  flexibility
+}
+
+enum LoggedEntryType {
+  meal
+  workout
+  weight
+}
+
+enum AchievementCategory {
+  streak
+  weight
+  logging
+  milestone
+  performance
+  habit
+  nutrition
+  fitness
+  variety
+  engagement
+}
+
+enum InsightCategory {
+  consistency
+  nutrition
+  exercise
+  progress
+  habits
+  adherence
+  patterns
+  suggestions
+}
+
+enum SavedItemType {
+  meal
+  workout
+}
+
+enum SyncQueueStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum SupportTicketType {
+  bug_report
+  feature_request
+  general_support
+  account_issue
+  billing_issue
+}
+
+enum SupportTicketStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum SupportTicketPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+enum WeightUnit {
+  lbs
+  kg
+}
+
+enum HeightUnit {
+  inches
+  cm
+}
+
+enum Theme {
+  light
+  dark
+  system
+}
+
+// =============================================================================
+// MODELS
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// 1. USER & AUTHENTICATION
+// -----------------------------------------------------------------------------
+
+model User {
+  id           String  @id @default(uuid()) @db.Uuid
+  email        String  @unique @db.VarChar(255)
+  firebaseUid  String? @unique @map("firebase_uid") @db.VarChar(128)
+  name         String  @db.VarChar(255)
+  passwordHash String  @map("password_hash") @db.VarChar(255)
+
+  // Onboarding Data (Q1)
+  onboardingComplete Boolean       @default(false) @map("onboarding_complete")
+  goal               Goal
+  currentWeight      Decimal       @map("current_weight") @db.Decimal(5, 2)
+  goalWeight         Decimal       @map("goal_weight") @db.Decimal(5, 2)
+  goalDate           DateTime?     @map("goal_date") @db.Date
+  height             Decimal       @db.Decimal(5, 2)
+  age                Int
+  gender             Gender
+  activityLevel      ActivityLevel @map("activity_level")
+
+  // Dietary Preferences
+  dietaryRestrictions Json @default("[]") @map("dietary_restrictions") @db.JsonB
+  dislikedFoods       Json @default("[]") @map("disliked_foods") @db.JsonB
+  preferredCuisines   Json @default("[]") @map("preferred_cuisines") @db.JsonB
+
+  // Eating Pattern (Q1 v3.1)
+  eatingPattern Json @map("eating_pattern") @db.JsonB
+
+  // Fitness Preferences
+  workoutFrequency   Int          @map("workout_frequency")
+  workoutDuration    Int          @default(30) @map("workout_duration") // Session duration in minutes (20, 30, 45, 60)
+  availableEquipment Json         @default("[]") @map("available_equipment") @db.JsonB
+  fitnessLevel       FitnessLevel @map("fitness_level")
+
+  // Calculated Metrics
+  bmr           Int
+  tdee          Int
+  dailyCalories Int  @map("daily_calories")
+  macros        Json @db.JsonB
+
+  // Maintenance Weight Monitoring (Q1 v3.1)
+  maintenanceThreshold     Decimal? @default(0.05) @map("maintenance_threshold") @db.Decimal(3, 2)
+  initialMaintenanceWeight Decimal? @map("initial_maintenance_weight") @db.Decimal(5, 2)
+
+  // Preferences
+  shoppingDay          ShoppingDay    @default(flexible) @map("shopping_day")
+  weeklyResetDay       WeeklyResetDay @default(monday) @map("weekly_reset_day")
+  notificationsEnabled Boolean        @default(true) @map("notifications_enabled")
+
+  // Streak Tracking
+  streakCurrent      Int     @default(0) @map("streak_current")
+  streakLongest      Int     @default(0) @map("streak_longest")
+  lastActiveTimezone String? @map("last_active_timezone") @db.VarChar(50)
+
+  // Subscription
+  subscriptionStatus    SubscriptionStatus @default(trial) @map("subscription_status")
+  subscriptionExpiresAt DateTime?          @map("subscription_expires_at") @db.Timestamptz(6)
+
+  // Timestamps
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz(6)
+
+  // Relations
+  settings            UserSettings?
+  subscription        SubscriptionStatusDetail? @relation("UserSubscription")
+  billingTransactions BillingTransaction[]
+  mealPlans           MealPlan[]
+  meals               Meal[]
+  groceryLists        GroceryList[]
+  workoutPlans        WorkoutPlan[]
+  workouts            Workout[]
+  loggedEntries       LoggedEntry[]
+  dailySummaries      DailySummary[]
+  weeklySummaries     WeeklySummary[]
+  weightEntries       WeightEntry[]
+  userAchievements    UserAchievement[]
+  streakHistory       StreakHistory[]
+  bodyMeasurements    BodyMeasurement[]
+  aiInsights          AiInsight[]
+  savedItems          SavedItem[]
+  syncQueue           SyncQueue[]
+  cacheEntries        CacheEntry[]
+  supportTickets      SupportTicket[]
+
+  @@index([email], name: "idx_users_email")
+  @@index([firebaseUid], name: "idx_users_firebase_uid")
+  @@index([subscriptionStatus], name: "idx_users_subscription")
+  @@index([deletedAt], name: "idx_users_deleted")
+  @@map("users")
+}
+
+model UserSettings {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+
+  // Notification Preferences
+  mealReminders       Boolean @default(true) @map("meal_reminders")
+  workoutReminders    Boolean @default(true) @map("workout_reminders")
+  weeklyPlanReminders Boolean @default(true) @map("weekly_plan_reminders")
+  progressUpdates     Boolean @default(true) @map("progress_updates")
+  reminderTimes       Json    @default("{\"breakfast\": \"08:00\", \"lunch\": \"12:00\", \"dinner\": \"18:00\", \"workout\": \"17:00\"}") @map("reminder_times") @db.JsonB
+
+  // Unit Preferences
+  weightUnit      WeightUnit @default(lbs) @map("weight_unit")
+  heightUnit      HeightUnit @default(inches) @map("height_unit")
+  measurementUnit HeightUnit @default(inches) @map("measurement_unit")
+
+  // Theme & Display
+  theme Theme @default(system)
+
+  // Weekly Schedule
+  preferredWorkoutDays Json @default("[]") @map("preferred_workout_days") @db.JsonB
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+model SubscriptionStatusDetail {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+
+  // Subscription Details
+  status            SubscriptionStatusDetailed
+  planType          PlanType?                  @map("plan_type")
+  billingCycleStart DateTime?                  @map("billing_cycle_start") @db.Date
+  billingCycleEnd   DateTime?                  @map("billing_cycle_end") @db.Date
+
+  // Payment
+  paymentMethodLast4   String? @map("payment_method_last4") @db.VarChar(4)
+  paymentMethodBrand   String? @map("payment_method_brand") @db.VarChar(20)
+  stripeCustomerId     String? @map("stripe_customer_id") @db.VarChar(255)
+  stripeSubscriptionId String? @map("stripe_subscription_id") @db.VarChar(255)
+
+  // Pricing
+  amountCents Int?   @map("amount_cents")
+  currency    String @default("USD") @db.VarChar(3)
+
+  // Timestamps
+  trialEndsAt DateTime? @map("trial_ends_at") @db.Timestamptz(6)
+  canceledAt  DateTime? @map("canceled_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user User @relation("UserSubscription", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscription_status")
+}
+
+model BillingTransaction {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  // Transaction Details
+  stripePaymentIntentId String?           @unique @map("stripe_payment_intent_id") @db.VarChar(255)
+  amountCents           Int               @map("amount_cents")
+  currency              String            @default("USD") @db.VarChar(3)
+  status                TransactionStatus
+  description           String?           @db.Text
+
+  // Metadata
+  billingPeriodStart DateTime? @map("billing_period_start") @db.Date
+  billingPeriodEnd   DateTime? @map("billing_period_end") @db.Date
+  receiptUrl         String?   @map("receipt_url") @db.Text
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], name: "idx_billing_user")
+  @@index([status], name: "idx_billing_status")
+  @@index([createdAt(sort: Desc)], name: "idx_billing_created")
+  @@map("billing_transactions")
+}
+
+model SupportTicket {
+  id     String  @id @default(uuid()) @db.Uuid
+  userId String? @map("user_id") @db.Uuid
+
+  // Ticket Details
+  subject  String                @db.VarChar(255)
+  message  String                @db.Text
+  type     SupportTicketType
+  status   SupportTicketStatus   @default(open)
+  priority SupportTicketPriority @default(normal)
+
+  // User Info
+  userEmail String  @map("user_email") @db.VarChar(255)
+  userName  String? @map("user_name") @db.VarChar(255)
+
+  // Response
+  adminResponse String?   @map("admin_response") @db.Text
+  resolvedAt    DateTime? @map("resolved_at") @db.Timestamptz(6)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId], name: "idx_support_tickets_user")
+  @@index([status], name: "idx_support_tickets_status")
+  @@index([createdAt(sort: Desc)], name: "idx_support_tickets_created")
+  @@map("support_tickets")
+}
+
+// -----------------------------------------------------------------------------
+// 2. PLANS & GENERATION
+// -----------------------------------------------------------------------------
+
+model MealPlan {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  // Week Range
+  weekStartDate DateTime   @map("week_start_date") @db.Date
+  weekEndDate   DateTime   @map("week_end_date") @db.Date
+  status        PlanStatus @default(active)
+
+  // Generation Metadata
+  generatedAt        DateTime @default(now()) @map("generated_at") @db.Timestamptz(6)
+  aiGenerationTimeMs Int?     @map("ai_generation_time_ms")
+
+  // Version Control (Q3.3 v1.1 - optimistic locking)
+  version Int @default(1)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meals        Meal[]
+  groceryLists GroceryList[]
+
+  @@unique([userId, weekStartDate, status], name: "unique_active_meal_plan_per_week")
+  @@index([userId], name: "idx_meal_plans_user")
+  @@index([weekStartDate], name: "idx_meal_plans_week")
+  @@index([userId, weekStartDate, status], name: "idx_meal_plans_user_week_status")
+  @@map("meal_plans")
+}
+
+model Meal {
+  id         String @id @default(uuid()) @db.Uuid
+  userId     String @map("user_id") @db.Uuid
+  mealPlanId String @map("meal_plan_id") @db.Uuid
+
+  // Meal Scheduling
+  dayOfWeek Int      @map("day_of_week")
+  mealType  MealType @map("meal_type")
+
+  // Meal Details
+  name        String  @db.VarChar(255)
+  description String? @db.Text
+  imageUrl    String? @map("image_url") @db.Text
+
+  // Nutrition
+  calories Int
+  macros   Json @db.JsonB
+
+  // Recipe
+  prepTimeMin Int? @map("prep_time_min")
+  cookTimeMin Int? @map("cook_time_min")
+
+  // User Feedback
+  isFavorite   Boolean   @default(false) @map("is_favorite")
+  isDisliked   Boolean   @default(false) @map("is_disliked")
+  feedbackText String?   @map("feedback_text") @db.Text
+  feedbackAt   DateTime? @map("feedback_at") @db.Timestamptz(6)
+
+  // Logging Status
+  logged   Boolean   @default(false)
+  loggedAt DateTime? @map("logged_at") @db.Timestamptz(6)
+
+  // Swap History (Q3.3 - allow undo of meal swaps)
+  swappedOut   Boolean   @default(false) @map("swapped_out")
+  swappedOutAt DateTime? @map("swapped_out_at") @db.Timestamptz(6)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mealPlan    MealPlan     @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  ingredients Ingredient[]
+  recipeSteps RecipeStep[]
+
+  @@index([mealPlanId], name: "idx_meals_plan")
+  @@index([userId], name: "idx_meals_user")
+  @@index([dayOfWeek], name: "idx_meals_day")
+  @@index([userId, isFavorite], name: "idx_meals_favorites")
+  @@map("meals")
+}
+
+model Ingredient {
+  id     String @id @default(uuid()) @db.Uuid
+  mealId String @map("meal_id") @db.Uuid
+
+  // Ingredient Details
+  name     String              @db.VarChar(255)
+  quantity Decimal             @db.Decimal(8, 2)
+  unit     Unit
+  category IngredientCategory?
+  notes    String?             @db.Text
+
+  // Order in recipe
+  displayOrder Int? @map("display_order")
+
+  // Relations
+  meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  @@index([mealId], name: "idx_ingredients_meal")
+  @@index([category], name: "idx_ingredients_category")
+  @@map("ingredients")
+}
+
+model RecipeStep {
+  id     String @id @default(uuid()) @db.Uuid
+  mealId String @map("meal_id") @db.Uuid
+
+  // Step Details
+  stepNumber  Int    @map("step_number")
+  instruction String @db.Text
+
+  // Relations
+  meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  @@unique([mealId, stepNumber])
+  @@index([mealId], name: "idx_recipe_steps_meal")
+  @@map("recipe_steps")
+}
+
+model GroceryList {
+  id         String @id @default(uuid()) @db.Uuid
+  userId     String @map("user_id") @db.Uuid
+  mealPlanId String @map("meal_plan_id") @db.Uuid
+
+  // Grocery Item
+  itemName String  @map("item_name") @db.VarChar(255)
+  quantity Decimal @db.Decimal(8, 2)
+  unit     String  @db.VarChar(20)
+  category String? @db.VarChar(30)
+
+  // User Actions
+  purchased Boolean @default(false)
+  notes     String? @db.Text
+
+  // Display Order
+  displayOrder Int? @map("display_order")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mealPlan MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+
+  @@index([mealPlanId], name: "idx_grocery_plan")
+  @@index([userId], name: "idx_grocery_user")
+  @@index([category], name: "idx_grocery_category")
+  @@map("grocery_lists")
+}
+
+model WorkoutPlan {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  // Week Range
+  weekStartDate DateTime   @map("week_start_date") @db.Date
+  weekEndDate   DateTime   @map("week_end_date") @db.Date
+  status        PlanStatus @default(active)
+
+  // Generation Metadata
+  generatedAt        DateTime @default(now()) @map("generated_at") @db.Timestamptz(6)
+  aiGenerationTimeMs Int?     @map("ai_generation_time_ms")
+
+  // Version Control (Q3.3 v1.1 - optimistic locking)
+  version Int @default(1)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workouts Workout[]
+
+  @@unique([userId, weekStartDate, status], name: "unique_active_workout_plan_per_week")
+  @@index([userId], name: "idx_workout_plans_user")
+  @@index([weekStartDate], name: "idx_workout_plans_week")
+  @@index([userId, weekStartDate, status], name: "idx_workout_plans_user_week_status")
+  @@map("workout_plans")
+}
+
+model Workout {
+  id            String @id @default(uuid()) @db.Uuid
+  userId        String @map("user_id") @db.Uuid
+  workoutPlanId String @map("workout_plan_id") @db.Uuid
+
+  // Workout Scheduling
+  dayOfWeek Int @map("day_of_week")
+
+  // Workout Details
+  name              String           @db.VarChar(255)
+  type              WorkoutType
+  workoutCategory   WorkoutCategory? @map("workout_category")
+  durationMin       Int              @map("duration_min")
+  estimatedCalories Int              @map("estimated_calories")
+
+  // User Feedback
+  isFavorite Boolean @default(false) @map("is_favorite")
+  isDisliked Boolean @default(false) @map("is_disliked")
+
+  // Logging Status
+  logged               Boolean   @default(false)
+  loggedAt             DateTime? @map("logged_at") @db.Timestamptz(6)
+  actualCaloriesBurned Int?      @map("actual_calories_burned")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workoutPlan WorkoutPlan @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
+  exercises   Exercise[]
+
+  @@index([workoutPlanId], name: "idx_workouts_plan")
+  @@index([userId], name: "idx_workouts_user")
+  @@index([dayOfWeek], name: "idx_workouts_day")
+  @@index([userId, isFavorite], name: "idx_workouts_favorites")
+  @@map("workouts")
+}
+
+model Exercise {
+  id        String @id @default(uuid()) @db.Uuid
+  workoutId String @map("workout_id") @db.Uuid
+
+  // Exercise Details
+  name        String  @db.VarChar(255)
+  sets        Int?
+  reps        Int?
+  durationMin Int?    @map("duration_min")
+  equipment   Json    @default("[]") @db.JsonB
+  notes       String? @db.Text
+
+  // Order in workout
+  displayOrder Int? @map("display_order")
+
+  // Relations
+  workout Workout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+
+  @@index([workoutId], name: "idx_exercises_workout")
+  @@map("exercises")
+}
+
+// -----------------------------------------------------------------------------
+// 3. LOGGING & TRACKING
+// -----------------------------------------------------------------------------
+
+model LoggedEntry {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  // Entry Type
+  type LoggedEntryType
+
+  // Date this entry applies to
+  date DateTime @db.Date
+
+  // Type-specific data (JSONB)
+  meal    Json? @db.JsonB
+  workout Json? @db.JsonB
+  weight  Json? @db.JsonB
+
+  // Timestamps
+  loggedAt  DateTime  @default(now()) @map("logged_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Favorites
+  isFavorite Boolean @default(false) @map("is_favorite")
+  isDisliked Boolean @default(false) @map("is_disliked")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], name: "idx_logged_entries_user")
+  @@index([date], name: "idx_logged_entries_date")
+  @@index([type], name: "idx_logged_entries_type")
+  @@index([userId, date], name: "idx_logged_entries_user_date")
+  @@index([userId, isFavorite], name: "idx_logged_entries_favorites")
+  @@map("logged_entries")
+}
+
+model DailySummary {
+  id     String   @id @default(uuid()) @db.Uuid
+  userId String   @map("user_id") @db.Uuid
+  date   DateTime @db.Date
+
+  // Nutrition Totals
+  caloriesConsumed Int  @default(0) @map("calories_consumed")
+  caloriesTarget   Int  @map("calories_target")
+  macrosConsumed   Json @default("{\"protein_g\": 0, \"carbs_g\": 0, \"fat_g\": 0}") @map("macros_consumed") @db.JsonB
+  macrosTarget     Json @map("macros_target") @db.JsonB
+
+  // Workout Totals
+  workoutsCompleted Int @default(0) @map("workouts_completed")
+  workoutsPlanned   Int @default(0) @map("workouts_planned")
+  totalExerciseMin  Int @default(0) @map("total_exercise_min")
+  caloriesBurned    Int @default(0) @map("calories_burned")
+
+  // Meals
+  mealsLogged  Int @default(0) @map("meals_logged")
+  mealsPlanned Int @default(0) @map("meals_planned")
+
+  // Status Flags
+  allMealsLogged    Boolean @default(false) @map("all_meals_logged")
+  allWorkoutsLogged Boolean @default(false) @map("all_workouts_logged")
+  streakMaintained  Boolean @default(false) @map("streak_maintained")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId], name: "idx_daily_summaries_user")
+  @@index([date], name: "idx_daily_summaries_date")
+  @@index([userId, date, streakMaintained], name: "idx_daily_summaries_streak")
+  @@map("daily_summaries")
+}
+
+model WeeklySummary {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  // Week Range
+  weekStart DateTime @map("week_start") @db.Date
+  weekEnd   DateTime @map("week_end") @db.Date
+
+  // Meal Tracking
+  mealsLogged    Int @default(0) @map("meals_logged")
+  workoutsLogged Int @default(0) @map("workouts_logged")
+
+  // Nutrition Totals
+  totalCalories     Int @default(0) @map("total_calories")
+  avgCaloriesPerDay Int @default(0) @map("avg_calories_per_day")
+  totalProteinG     Int @default(0) @map("total_protein_g")
+  totalCarbsG       Int @default(0) @map("total_carbs_g")
+  totalFatG         Int @default(0) @map("total_fat_g")
+
+  // Workout Totals
+  totalExerciseMinutes Int @default(0) @map("total_exercise_minutes")
+  totalCaloriesBurned  Int @default(0) @map("total_calories_burned")
+
+  // Progress
+  daysCompleted Int @default(0) @map("days_completed")
+
+  // Weight Change
+  startingWeight Decimal? @map("starting_weight") @db.Decimal(5, 2)
+  endingWeight   Decimal? @map("ending_weight") @db.Decimal(5, 2)
+  weightChange   Decimal? @map("weight_change") @db.Decimal(5, 2)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekStart])
+  @@index([userId], name: "idx_weekly_summaries_user")
+  @@index([weekStart], name: "idx_weekly_summaries_week")
+  @@map("weekly_summaries")
+}
+
+model WeightEntry {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  // Weight Data
+  weightLbs Decimal @map("weight_lbs") @db.Decimal(5, 2)
+  notes     String? @db.Text
+
+  // Calculated Fields
+  changeFromLast  Decimal? @map("change_from_last") @db.Decimal(5, 2)
+  changeFromStart Decimal? @map("change_from_start") @db.Decimal(5, 2)
+
+  // Timestamps
+  loggedAt  DateTime @default(now()) @map("logged_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], name: "idx_weight_entries_user")
+  @@index([loggedAt], name: "idx_weight_entries_logged")
+  @@index([userId, loggedAt], name: "idx_weight_entries_user_logged")
+  @@map("weight_entries")
+}
+
+// -----------------------------------------------------------------------------
+// 4. PROGRESS & GAMIFICATION
+// -----------------------------------------------------------------------------
+
+model Achievement {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Achievement Details
+  name        String              @unique @db.VarChar(255)
+  description String              @db.Text
+  category    AchievementCategory
+  icon        String?             @db.VarChar(50)
+
+  // Unlock Condition
+  unlockCondition Json @map("unlock_condition") @db.JsonB
+
+  // Display
+  displayOrder Int?    @map("display_order")
+  isActive     Boolean @default(true) @map("is_active")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  userAchievements UserAchievement[]
+
+  @@index([category], name: "idx_achievements_category")
+  @@index([isActive], name: "idx_achievements_active")
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id            String @id @default(uuid()) @db.Uuid
+  userId        String @map("user_id") @db.Uuid
+  achievementId String @map("achievement_id") @db.Uuid
+
+  // Progress Tracking
+  progressCurrent Int @default(0) @map("progress_current")
+  progressTarget  Int @map("progress_target")
+
+  // Unlock Status
+  unlocked   Boolean   @default(false)
+  unlockedAt DateTime? @map("unlocked_at") @db.Timestamptz(6)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId], name: "idx_user_achievements_user")
+  @@index([userId, unlocked], name: "idx_user_achievements_unlocked")
+  @@map("user_achievements")
+}
+
+model StreakHistory {
+  id     String   @id @default(uuid()) @db.Uuid
+  userId String   @map("user_id") @db.Uuid
+  date   DateTime @db.Date
+
+  // Streak Status
+  completed         Boolean
+  streakCountAtDate Int     @map("streak_count_at_date")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId], name: "idx_streak_history_user")
+  @@index([date], name: "idx_streak_history_date")
+  @@index([userId, date(sort: Desc)], name: "idx_streak_history_user_date")
+  @@map("streak_history")
+}
+
+model BodyMeasurement {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  // Measurements (stored in inches)
+  waist  Decimal? @db.Decimal(5, 2)
+  chest  Decimal? @db.Decimal(5, 2)
+  hips   Decimal? @db.Decimal(5, 2)
+  arms   Decimal? @db.Decimal(5, 2)
+  thighs Decimal? @db.Decimal(5, 2)
+  calves Decimal? @db.Decimal(5, 2)
+  neck   Decimal? @db.Decimal(5, 2)
+
+  // Notes
+  notes String? @db.Text
+
+  // Timestamps
+  measuredAt DateTime @default(now()) @map("measured_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], name: "idx_body_measurements_user")
+  @@index([measuredAt], name: "idx_body_measurements_measured")
+  @@map("body_measurements")
+}
+
+model AiInsight {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  // Insight Details
+  insightText     String           @map("insight_text") @db.Text
+  insightCategory InsightCategory? @map("insight_category")
+
+  // Week Reference
+  weekStart DateTime @map("week_start") @db.Date
+  weekEnd   DateTime @map("week_end") @db.Date
+
+  // AI Metadata
+  aiModel            String? @map("ai_model") @db.VarChar(50)
+  aiTokensUsed       Int?    @map("ai_tokens_used")
+  aiGenerationTimeMs Int?    @map("ai_generation_time_ms")
+
+  // Cache Control
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], name: "idx_ai_insights_user")
+  @@index([weekStart], name: "idx_ai_insights_week")
+  @@index([expiresAt], name: "idx_ai_insights_expires")
+  @@map("ai_insights")
+}
+
+// -----------------------------------------------------------------------------
+// 5. FAVORITES & SAVED ITEMS
+// -----------------------------------------------------------------------------
+
+model SavedItem {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  // Item Type
+  type SavedItemType
+
+  // Type-specific data (JSONB)
+  meal    Json? @db.JsonB
+  workout Json? @db.JsonB
+
+  // Metadata
+  favoritedAt  DateTime  @default(now()) @map("favorited_at") @db.Timestamptz(6)
+  logCount     Int       @default(0) @map("log_count")
+  lastLoggedAt DateTime? @map("last_logged_at") @db.Timestamptz(6)
+
+  // Source Reference (optional)
+  sourceLoggedEntryId String? @map("source_logged_entry_id") @db.Uuid
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], name: "idx_saved_items_user")
+  @@index([type], name: "idx_saved_items_type")
+  @@index([userId, type], name: "idx_saved_items_user_type")
+  @@index([favoritedAt(sort: Desc)], name: "idx_saved_items_favorited")
+  @@map("saved_items")
+}
+
+// -----------------------------------------------------------------------------
+// 6. OFFLINE & SYNC
+// -----------------------------------------------------------------------------
+
+model SyncQueue {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  // Action Details
+  actionType   String  @map("action_type") @db.VarChar(50)
+  resourceType String  @map("resource_type") @db.VarChar(50)
+  resourceId   String? @map("resource_id") @db.Uuid
+
+  // Payload
+  payload Json @db.JsonB
+
+  // Priority Queue
+  priority Int
+
+  // Dependency Tracking
+  dependsOnId String? @map("depends_on_id") @db.Uuid
+
+  // Status
+  status     SyncQueueStatus @default(pending)
+  retryCount Int             @default(0) @map("retry_count")
+  maxRetries Int             @default(3) @map("max_retries")
+  lastError  String?         @map("last_error") @db.Text
+
+  // Timestamps
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], name: "idx_sync_queue_user")
+  @@index([status], name: "idx_sync_queue_status")
+  @@index([priority, createdAt], name: "idx_sync_queue_priority")
+  @@index([dependsOnId], name: "idx_sync_queue_depends")
+  @@map("sync_queue")
+}
+
+model CacheEntry {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  // Cache Key
+  cacheKey String @map("cache_key") @db.VarChar(255)
+
+  // Cached Data
+  data Json @db.JsonB
+
+  // Cache Metadata
+  priority  Int
+  sizeBytes Int @map("size_bytes")
+
+  // Expiration
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
+
+  // Access Tracking (LRU)
+  accessedAt  DateTime @default(now()) @map("accessed_at") @db.Timestamptz(6)
+  accessCount Int      @default(0) @map("access_count")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cacheKey])
+  @@index([userId], name: "idx_cache_entries_user")
+  @@index([expiresAt], name: "idx_cache_entries_expires")
+  @@index([priority, accessedAt], name: "idx_cache_entries_priority_accessed")
+  @@map("cache_entries")
+}

@@ -1,0 +1,17 @@
+const { getDefaultConfig } = require('expo/metro-config');
+
+const config = getDefaultConfig(__dirname);
+
+// Exclude parent directories from being watched
+config.watchFolders = [__dirname];
+
+// Ignore non-essential files
+config.resolver.blockList = [
+  /.*\/project\/.*/,
+  /.*\/handoffs\/.*/,
+  /.*\/logs\/.*/,
+  /.*\/archive\/.*/,
+  /.*\/backend\/.*/,
+];
+
+module.exports = config;
